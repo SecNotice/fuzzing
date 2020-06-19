@@ -120,32 +120,39 @@ As a result of this effort, I reported the following bugs:
 Если вы хотите использовать программное обеспечение, которое использует сокеты для получения входных данных, первый шаг к решению проблемы, как правило, включает внесение некоторых изменений в исходный код для облегчения фаззинга. Процесс фаззинга обычно прост, когда входные данные основаны на файлах, как это может быть в случае с библиотеками изображений, такими как libpng, libjpg и т.д. В этих случаях требуется небольшое изменение целевого исходного кода или даже не требуется и его.
 
 However, when dealing with networked, interactive servers (such as FTP servers), where the requests we send may cause all sorts of system state changes (uploads, downloads, parallel tasks, etc.), the process is not that simple.
+
 Однако при работе с сетевыми интерактивными серверами (такими как FTP-серверы), где отправляемые нами запросы могут вызывать всевозможные изменения состояния системы (загрузка, загрузка, параллельные задачи и т. Д.), Процесс не так прост.
 
 A possible approach for such cases would be to make use of something like Preeny. [Preeny](https://github.com/zardus/preeny) is a set of preloaded libraries which help to simplify fuzzing and “pwning” tasks. Among other capabilities, Preeny allows you to **de-socket** software, i.e. redirecting socket data flow from/to stdin and stdout.
+
 Возможный подход для таких случаев будет использовать что-то вроде Preeny. Preeny - это набор предустановленных библиотек, которые помогают упростить задачи фаззинга и pwning. Помимо других возможностей, Preeny позволяет отключать программное обеспечение от сокетов, то есть перенаправлять поток данных сокетов с / на stdin и stdout.
 
 While it’s true that Preeny is a handy tool, its approach to de-socketing can remove the kind of granularity required to address the peculiarities of your fuzzing target. Every piece of software is unique, and we often want a high level of control over how and where to influence input and process state when fuzzing software to ensure we get the required amount of surface coverage. Because of this, I usually choose the manual source modification approach, which gives me greater flexibility in dealing with corner cases.
+
 Несмотря на то, что Preeny - удобный инструмент, его подход к удалению сокетов может устранить степень детализации, необходимую для решения особенностей вашей размытой цели. Каждая часть программного обеспечения уникальна, и нам часто требуется высокий уровень контроля над тем, как и где влиять на состояние ввода и процесса при фаззинге программного обеспечения, чтобы гарантировать получение необходимого количества покрытия поверхности. Из-за этого я обычно выбираю подход к модификации исходного кода, который дает мне большую гибкость при работе с угловыми случаями.
 
 What follows are some practical tips to help you address common challenges when you start with socket based fuzzing, in the context of our FTP case study.
+
 Ниже приведены некоторые практические советы, которые помогут вам решить распространенные проблемы, когда вы начнете с фаззинга на основе сокетов, в контексте нашего примера внедрения FTP.
 
 ### Sockets
 
 Our FTP fuzzing will mainly focus on the **command channel**, which is the channel we use for transmitting FTP commands and receiving command responses.
+
 В нашем размышлении по FTP основное внимание будет уделено командному каналу, который мы используем для передачи команд FTP и получения ответов на команды.
 
 In the Linux case it’s usually very simple to swap a network endpoint backed file descriptor for a file backed file descriptor without having to rewrite too much of the code.
+
 В случае Linux обычно очень просто поменять дескриптор файла с файловой поддержкой конечной точки на дескриптор файла с файловой поддержкой без необходимости переписывать слишком большую часть кода.
 
-[![Changes in ProFTPD code: turning a network file descriptor into a regular file descriptor](/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)](/static/d7effe195eb9ece94e972345def04aa3/47573/fs-1.png)
+[![Changes in ProFTPD code: turning a network file descriptor into a regular file descriptor](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)
+
 Изменения в коде ProFTPD: превращение сетевого дескриптора файла в обычный дескриптор файла
 
 In this case, inputFile is the current AFL file ([input_path]/.cur_input) which we pass as a custom argument.
 В этом случае inputFile - это текущий файл AFL ([input_path] /. Cur_input), который мы передаем в качестве пользовательского аргумента.
 
-[![Extracting inputFile from command line](/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)](/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)
+[![Extracting inputFile from command line](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)
 Извлечение inputFile из командной строки
 
 The AFL command line is as follows:
@@ -156,25 +163,25 @@ _afl-fuzz -t 1000 -m none -i './AFL/afl_in' -o './AFL/afl_out' -x ./AFL/dictiona
 These changes mean that we cannot call certain network API functions such as getsockname and getnameinfo (we’d get an ENOTSOCK error). So I comment out these function calls and hard-code their associated result variables instead:
 Эти изменения означают, что мы не можем вызывать определенные функции сетевого API, такие как getsockname и getnameinfo (мы получили ошибку ENOTSOCK). Поэтому я закомментирую эти вызовы функций и жестко закодирую связанные с ними переменные результата:
 
-[![Changes in PureFTPd: Comment out getsockname and getnameinfo](/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)](/static/2e476bfe9dad76eb74674620f8392665/4f1c7/fs-3.png)
+[![Changes in PureFTPd: Comment out getsockname and getnameinfo](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)
 
 We also can’t use network fd specific operations such as send(3) so we have to move to a lower level non-network specific API such as write(2):
 
-[![Changes in BFTPd: send call by write call](/static/a7c64bf2c4824da251f451cd8dd24693/fddbb/fs-4.png)](/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)
+[![Changes in BFTPd: send call by write call](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)
 
 Up to this point we’ve only dealt with the command channel, but we also need to ensure that the data channel receives data so that uploads and downloads can function when we fuzz.
 
 For the **file upload case** I use a call to getrandom(2) to return random file data:
 
-[![Changes in PureFTPd: call to linux getrandom(2) for retrieving random data](/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](/static/69525bba4ec192fcf09080ea51a25391/9435c/fs-5.png)
+[![Changes in PureFTPd: call to linux getrandom(2) for retrieving random data](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)
 
 For the **file download case,** we can directly write the file content to stderr:
 
-[![Changes in PureFTPd: redirection of data channel output to stderr](/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)](/static/c6cec285e1db60ce5cfb9bfa936c852c/72501/fs-6.png)
+[![Changes in PureFTPd: redirection of data channel output to stderr](https://securitylab.github.com/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)
 
 Because we want to keep using stdin and stderr, we must avoid closing STDOUT_FILENO(1) and STDERR_FILENO(2) in the data channel code:
 
-[![Changes in PureFTPd: Avoid to close STDOUT and STDERR file descriptors](/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)](/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
+[![Changes in PureFTPd: Avoid to close STDOUT and STDERR file descriptors](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
 
 We also need to modify the reading/write functions that depend on external libraries, as is the case with **OpenSSL**:
 
