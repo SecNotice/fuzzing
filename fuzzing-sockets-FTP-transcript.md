@@ -25,8 +25,7 @@
 
 
 
-
-As a result of this effort, I reported the following bugs:
+В результате этих усилий я отрепортил следующие баги:
 
 <table>
 <tbody>
@@ -40,13 +39,9 @@ As a result of this effort, I reported the following bugs:
 <td>CVE-2019-20176</td>
 <td>Stack exhaustion in listdir (remote DoS)</td>
 </tr>
-
 <tr>
-
 <td>Pure-FTPd</td>
-
 <td>CVE-2020-9274</td>
-
 <td>Uninitialized pointer in diraliases linked-list</td>
 
 </tr>
@@ -119,23 +114,17 @@ As a result of this effort, I reported the following bugs:
 
 Если вы хотите использовать программное обеспечение, которое использует сокеты для получения входных данных, первый шаг к решению проблемы, как правило, включает внесение некоторых изменений в исходный код для облегчения фаззинга. Процесс фаззинга обычно прост, когда входные данные основаны на файлах, как это может быть в случае с библиотеками изображений, такими как libpng, libjpg и т.д. В этих случаях требуется небольшое изменение целевого исходного кода или даже не требуется и его.
 
-However, when dealing with networked, interactive servers (such as FTP servers), where the requests we send may cause all sorts of system state changes (uploads, downloads, parallel tasks, etc.), the process is not that simple.
+Однако при работе с сетевыми интерактивными серверами (такими как FTP-серверы), где отправляемые нами запросы могут вызывать всевозможные изменения состояния системы (загрузка, загрузка, параллельные задачи и т. Д.), процесс не так прост.
 
-Однако при работе с сетевыми интерактивными серверами (такими как FTP-серверы), где отправляемые нами запросы могут вызывать всевозможные изменения состояния системы (загрузка, загрузка, параллельные задачи и т. Д.), Процесс не так прост.
+Возможным подходом для таких случаев было бы использование чего-то подобного Preeny. [Preeny](https://github.com/zardus/preeny) - это набор предустановленных библиотек, которые помогают упростить задачи фаззинга и “pwning”-га. Помимо других возможностей, Preeny позволяет отключать программное обеспечение от сокетов (**de-socket**), то есть перенаправлять поток данных сокетов с/на stdin и stdout.
 
-A possible approach for such cases would be to make use of something like Preeny. [Preeny](https://github.com/zardus/preeny) is a set of preloaded libraries which help to simplify fuzzing and “pwning” tasks. Among other capabilities, Preeny allows you to **de-socket** software, i.e. redirecting socket data flow from/to stdin and stdout.
-
-Возможный подход для таких случаев будет использовать что-то вроде Preeny. Preeny - это набор предустановленных библиотек, которые помогают упростить задачи фаззинга и pwning. Помимо других возможностей, Preeny позволяет отключать программное обеспечение от сокетов, то есть перенаправлять поток данных сокетов с / на stdin и stdout.
-
-While it’s true that Preeny is a handy tool, its approach to de-socketing can remove the kind of granularity required to address the peculiarities of your fuzzing target. Every piece of software is unique, and we often want a high level of control over how and where to influence input and process state when fuzzing software to ensure we get the required amount of surface coverage. Because of this, I usually choose the manual source modification approach, which gives me greater flexibility in dealing with corner cases.
-
-Несмотря на то, что Preeny - удобный инструмент, его подход к удалению сокетов может устранить степень детализации, необходимую для решения особенностей вашей размытой цели. Каждая часть программного обеспечения уникальна, и нам часто требуется высокий уровень контроля над тем, как и где влиять на состояние ввода и процесса при фаззинге программного обеспечения, чтобы гарантировать получение необходимого количества покрытия поверхности. Из-за этого я обычно выбираю подход к модификации исходного кода, который дает мне большую гибкость при работе с угловыми случаями.
+Несмотря на то, что Preeny - удобный инструмент, его подход к удалению сокетов может устранить степень детализации, необходимую для использования особенностей фаззинг-цели. Каждая часть программного обеспечения уникальна и нам часто требуется высокий уровень контроля над тем, как и где влиять на состояние ввода и процесса при фаззинге программного обеспечения, чтобы гарантировать получение необходимого количества покрытия. Из-за этого я обычно выбираю подход с модификацией исходного кода, который дает мне большую гибкость при работе с крайними случаями.
 
 What follows are some practical tips to help you address common challenges when you start with socket based fuzzing, in the context of our FTP case study.
 
-Ниже приведены некоторые практические советы, которые помогут вам решить распространенные проблемы, когда вы начнете с фаззинга на основе сокетов, в контексте нашего примера внедрения FTP.
+Ниже приведены некоторые практические советы, которые помогут решить распространенные проблемы, появляющиеся, когда вы начинаете  фаззинг на основе сокетов, в контексте нашего примера внедрения FTP.
 
-### Sockets
+### Сокеты
 
 Our FTP fuzzing will mainly focus on the **command channel**, which is the channel we use for transmitting FTP commands and receiving command responses.
 
