@@ -185,39 +185,39 @@ Because we want to keep using stdin and stderr, we must avoid closing STDOUT_FIL
 
 We also need to modify the reading/write functions that depend on external libraries, as is the case with **OpenSSL**:
 
-[![Changes in PureFTPd: writing ssl connection output to STDOUT](/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
+[![Changes in PureFTPd: writing ssl connection output to STDOUT](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
 
 ### Modifying file system calls
 
 Because we want to maximize the chances of finding a vulnerability, it’s helpful to delete certain system calls such as unlink(2). This will prevent the fuzzer from deleting files by accident.
 
-[![Changes in ProFTPD: Comment out unlink calls](/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
+[![Changes in ProFTPD: Comment out unlink calls](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
 
 Likewise, we delete any calls to rmdir(2) (directory deletion function in Linux):
 
-[![Changes in BFTPd: Comment out rmdir calls](/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)](/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)
+[![Changes in BFTPd: Comment out rmdir calls](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)
 
 Since the fuzzer may end up modifying folder permissions, it’s important to periodically restore the original permissions. This way we avoid the fuzzer getting stuck:
 
-[![Changes in ProFTPd: Restoring privileges in FTP default dir](/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)](/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)
+[![Changes in ProFTPd: Restoring privileges in FTP default dir](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)
 
 ### Event handling
 
 Analyzing multiple event combinations will require the modification of event handling functions. For example, below I’ve replaced the call to poll by a call to FUZZ_poll:
 
-[![Changes in PureFTPd: Call to poll function replaced by FUZZ_poll call](/static/5b98e8146a2a938be35571d54166756b/fddbb/fs-12.png)](/static/5b98e8146a2a938be35571d54166756b/6bcd1/fs-12.png)
+[![Changes in PureFTPd: Call to poll function replaced by FUZZ_poll call](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/fddbb/fs-12.png)](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/6bcd1/fs-12.png)
 
 This function is very simple, and just increments fds[0].revents and fds[1].revents values depending on RAND_MAX/10 and RAND_MAX/5 probability:
 
-[![Custom poll function](/static/613a5b903045dc96e99fa90b9be607d5/2a182/fs-13.png)](/static/613a5b903045dc96e99fa90b9be607d5/2a182/fs-13.png)
+[![Custom poll function](https://securitylab.github.com/static/613a5b903045dc96e99fa90b9be607d5/2a182/fs-13.png)](https://securitylab.github.com/static/613a5b903045dc96e99fa90b9be607d5/2a182/fs-13.png)
 
 You often want to delete or replace moot event polling code altogether since it doesn’t contribute to our surface coverage and just introduces unneeded complexity. In the following example, we patch out a moot select(2) call to that end.
 
-[![Changes in ProFTPD: Comment out select call](/static/ceb0cb66da1ba98ff9c5c48cada23dca/fddbb/fs-14.png)](/static/ceb0cb66da1ba98ff9c5c48cada23dca/73d01/fs-14.png)
+[![Changes in ProFTPD: Comment out select call](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/fddbb/fs-14.png)](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/73d01/fs-14.png)
 
 We must also take into account any situation where concurrent events between the data channel and the command channel get interleaved. CVE-2020-9273 is a good example of this occurring. This bug is triggered by sending a specific command sequence to the command channel while a data transfer is also running. To deal with that situation, I’ve built a small fuzzer function fuzzer_5tc2 that feeds strings from the provided dictionary to the fuzzer:
 
-[![Changes in PureFTPd: custom fuzzing function that feeds strings from a dictionary](/static/0d9516eb604454c9cb4d944dd1830f56/fddbb/fs-15.png)](/static/0d9516eb604454c9cb4d944dd1830f56/92cc8/fs-15.png)
+[![Changes in PureFTPd: custom fuzzing function that feeds strings from a dictionary](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/fddbb/fs-15.png)](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/92cc8/fs-15.png)
 
 ### Bye bye forks
 
@@ -233,7 +233,7 @@ $ ./configure --enable-devel=coredump:nodaemon:nofork:profile:stacktrace ...
 
 In the absence of any such options, to avoid fork(2), we just delete the actual fork(2) invocation and hardcode a return value of 0 which will continue down the intended child process execution path:
 
-[![Changes in PureFTPd: fork commented](/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)](/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)
+[![Changes in PureFTPd: fork commented](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)
 
 ### chroot and permissions
 
@@ -243,7 +243,7 @@ Once the user is logged in, the FTP server usually calls chroot(2) to change the
 
 For example, the child process path may drop privileges and we may no longer be able to access the AFL .cur_input file. To address this, the following is a simple example in which we just set the file world readable/writable/executable:
 
-[![Changes in ProFTPd: Changing .cur_input permissions](/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)](/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)
+[![Changes in ProFTPd: Changing .cur_input permissions](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)
 
 ### Reducing randomness
 
@@ -251,31 +251,31 @@ In order to improve the AFL stability score, we need to minimize randomness in o
 
 In the following example, we neuter the random number generation and return a repeatable RNG state:
 
-[![Changes in PureFTPd: Setting a fixed rng](/static/fa8624a859a3ea57215a9b0805a0445d/fddbb/fs-18.png)](/static/fa8624a859a3ea57215a9b0805a0445d/b828e/fs-18.png)
+[![Changes in PureFTPd: Setting a fixed rng](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/fddbb/fs-18.png)](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/b828e/fs-18.png)
 
-[![Changes in ProFTPd: Initializing srandom with a fixed value](/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)](/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)
+[![Changes in ProFTPd: Initializing srandom with a fixed value](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)
 
 ### Signals
 
 Many applications include their own signal handlers to replace the default Linux signal handlers. This can cause errors in AFL by preventing it from catching specific signals. We generally don’t want to delete all signal handlers as this can cause unexpected behavior in the application, so we must identify any signals which could lead to errors in AFL execution.
 
-[![Code snippet from ProFTPd: Signal handling](/static/9007ff5b0cdc66140ac7cddab885d8b7/337b6/fs-20.png)](/static/9007ff5b0cdc66140ac7cddab885d8b7/337b6/fs-20.png)
+[![Code snippet from ProFTPd: Signal handling](https://securitylab.github.com/static/9007ff5b0cdc66140ac7cddab885d8b7/337b6/fs-20.png)](https://securitylab.github.com/static/9007ff5b0cdc66140ac7cddab885d8b7/337b6/fs-20.png)
 
 Comment out calls to alarm(2) function can also be helpful:
 
-[![Changes in BFTPd: Comment out calls to alarm](/static/1cbce2437b5b1e2f1787352b008a17c8/fddbb/fs-21.png)](/static/1cbce2437b5b1e2f1787352b008a17c8/3658a/fs-21.png)
+[![Changes in BFTPd: Comment out calls to alarm](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/fddbb/fs-21.png)](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/3658a/fs-21.png)
 
 ### Avoiding delays and optimizing
 
 Timing is critical, even more so when we talk about fuzzing. Any unneeded delays must be minimized in the application to increase fuzzing speed. In the following example, we make timing intervals smaller where possible and remove unneeded calls to sleep(3) or usleep(3):
 
-[![Changes in ProFTPD: Reducing delay time](/static/16740e422c06033e75f2bcc44c97cd89/fddbb/fs-22.png)](/static/16740e422c06033e75f2bcc44c97cd89/8ff1e/fs-22.png)
+[![Changes in ProFTPD: Reducing delay time](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/fddbb/fs-22.png)](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/8ff1e/fs-22.png)
 
-[![Changes in PureFTPd: comment out usleep](/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)](/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)
+[![Changes in PureFTPd: comment out usleep](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)
 
 Likewise, often when fuzzing, you’ll notice that small changes in logic flow can speed up the fuzzing process tremendously. For example, as the number of generated files increases, the execution time of the listdir command grew, so I chose to only execute listdir once every N times:
 
-[![Changes in PureFTPd: reduced executions of listdir to speed up fuzzing](/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)](/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)
+[![Changes in PureFTPd: reduced executions of listdir to speed up fuzzing](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)
 
 ### One last point
 
@@ -285,7 +285,7 @@ Effective fuzzing requires **detailed knowledge of the internals of the software
 
 For example, to effectively fuzz the FTP servers we tackled in this case study, we had to modify nearly **1,500 lines of code**:
 
-[![alt_text](/static/00c68433df4bacc8eda223de0982876a/67648/fs-25.png)](/static/00c68433df4bacc8eda223de0982876a/67648/fs-25.png)
+[![alt_text](https://securitylab.github.com/static/00c68433df4bacc8eda223de0982876a/67648/fs-25.png)](https://securitylab.github.com/static/00c68433df4bacc8eda223de0982876a/67648/fs-25.png)
 
 The process of integrating the targeted code and the fuzzer, is a task that requires significant effort and is critical for obtaining successful results. It’s a highly sought-after goal in the fuzzing community as evidenced by the fact that rewards are quite high, such as [Google offering up to $20.000](https://www.google.com/about/appsecurity/patch-rewards/) for integrating security-critical projects with OSS-Fuzz.
 
@@ -295,7 +295,7 @@ This should inspire developers to facilitate fuzzing, as well as inspire the cre
 
 As far as fuzzing input corpus is concerned for this project, my main goal was to achieve full edge coverage for all FTP commands, as well as a diverse combination of execution scenarios to obtain a reasonably complete path coverage.
 
-[![Ideal initial scenario](/static/6a428fbb7fa0acca55ea79da9ae7752c/d51e0/fs-26.png)](/static/6a428fbb7fa0acca55ea79da9ae7752c/d51e0/fs-26.png)
+[![Ideal initial scenario](https://securitylab.github.com/static/6a428fbb7fa0acca55ea79da9ae7752c/d51e0/fs-26.png)](https://securitylab.github.com/static/6a428fbb7fa0acca55ea79da9ae7752c/d51e0/fs-26.png)
 
 Check out the **[input corpus](https://github.com/antonio-morales/Fuzzing/tree/master/Input%20Corpus/FTP/PureFTPd)** I’ve used for PureFTPd. And you can also find here [an example of a simple FTP fuzzing dictionary](https://github.com/antonio-morales/Fuzzing/blob/master/Dictionaries/FTP/Example.dict.txt).
 
@@ -309,23 +309,23 @@ This bug allows you to corrupt the ProFTPd memory pool by sending specific data 
 
 The ProFTPd memory pools implementation is based on Apache HTTP Server and is structured in a **hierarchical way** (longer to shorter lifetime).
 
-[![Hierarchical structure of pools](/static/de356f4e71fecf45dfcec756a7723f89/fddbb/fs-27.png)](/static/de356f4e71fecf45dfcec756a7723f89/e3e30/fs-27.png)
+[![Hierarchical structure of pools](https://securitylab.github.com/static/de356f4e71fecf45dfcec756a7723f89/fddbb/fs-27.png)](https://securitylab.github.com/static/de356f4e71fecf45dfcec756a7723f89/e3e30/fs-27.png)
 
 Internally, each pool is structured as a linked-list of resources and these resources are freed automatically when the pool is destroyed.
 
-[![Graphical representation of a memory pool (simplified)](/static/f63476b659abf3223ecc82a9188a9a05/fddbb/fs-28.png)](/static/f63476b659abf3223ecc82a9188a9a05/9199c/fs-28.png)
+[![Graphical representation of a memory pool (simplified)](https://securitylab.github.com/static/f63476b659abf3223ecc82a9188a9a05/fddbb/fs-28.png)](https://securitylab.github.com/static/f63476b659abf3223ecc82a9188a9a05/9199c/fs-28.png)
 
 Each time pcalloc (ProFTPd’s dynamic allocator) is called, it tries to meet the demand using the available memory from the last element of the linked-list. If more memory than the available amount is required, pcalloc adds a new block at the end of the linked-list by calling the new_block function.
 
-[![Call to new_block when available free space is not big enough](/static/dbff8b7028ec6752da0547caf336905a/6c314/fs-29.png)](/static/dbff8b7028ec6752da0547caf336905a/6c314/fs-29.png)
+[![Call to new_block when available free space is not big enough](https://securitylab.github.com/static/dbff8b7028ec6752da0547caf336905a/6c314/fs-29.png)](https://securitylab.github.com/static/dbff8b7028ec6752da0547caf336905a/6c314/fs-29.png)
 
 The problem is that the new_block function is not secure when used in concurrent scenarios, and under certain circumstances, the new_block function can grab a block that’s already present in the pool as a free block, causing pool list corruption.
 
-[![Example of corrupted memory pool](/static/4c8730ac37fc93f50808c3c2e906a0c9/fddbb/fs-30.png)](/static/4c8730ac37fc93f50808c3c2e906a0c9/9199c/fs-30.png)
+[![Example of corrupted memory pool](https://securitylab.github.com/static/4c8730ac37fc93f50808c3c2e906a0c9/fddbb/fs-30.png)](https://securitylab.github.com/static/4c8730ac37fc93f50808c3c2e906a0c9/9199c/fs-30.png)
 
 In the following example, we can see the pool is damaged since the outlined memory values are not valid memory addresses:
 
-[![Corrupted addresses](/static/f094ec11bc54618a8a9e17f4ee05e887/fddbb/fs-31.png)](/static/f094ec11bc54618a8a9e17f4ee05e887/0324b/fs-31.png)
+[![Corrupted addresses](https://securitylab.github.com/static/f094ec11bc54618a8a9e17f4ee05e887/fddbb/fs-31.png)](https://securitylab.github.com/static/f094ec11bc54618a8a9e17f4ee05e887/0324b/fs-31.png)
 
 The severity of this bug is considerable given that:
 
@@ -336,7 +336,7 @@ The severity of this bug is considerable given that:
 
 This bug is an **OOB-Read** vulnerability that affects the pure_strcmp function in **Pure-FTPd**. As shown in the next code snippet, the bug is due to the fact that **s1 and s2 strings can be different sizes**.
 
-[![Vulnerable code](/static/6276214d998d04d1c07cb5b564204cf6/e9b2e/fs-32.jpg)](/static/6276214d998d04d1c07cb5b564204cf6/22a9e/fs-32.jpg)
+[![Vulnerable code](https://securitylab.github.com/static/6276214d998d04d1c07cb5b564204cf6/e9b2e/fs-32.jpg)](https://securitylab.github.com/static/6276214d998d04d1c07cb5b564204cf6/22a9e/fs-32.jpg)
 
 Therefore, if the length of s1 is greater than s2 then the for loop will do len-1 iterations, where len-1 > strlen(s2). As a result, the program accesses memory that’s outside of the boundaries of the s2 array.
 
@@ -348,11 +348,11 @@ In this case, we found an uninitialized pointer vulnerability that could also re
 
 The source of the problem comes from the init_aliases function in diraliases.c. In this function, the next member of the last item in the linked list is not set to NULL.
 
-[![The next member of the last item is not set to NULL](/static/6f66e2d02f588ddaaba8b4a0f9c6d517/fddbb/fs-33.png)](/static/6f66e2d02f588ddaaba8b4a0f9c6d517/9f7a2/fs-33.png)
+[![The next member of the last item is not set to NULL](https://securitylab.github.com/static/6f66e2d02f588ddaaba8b4a0f9c6d517/fddbb/fs-33.png)](https://securitylab.github.com/static/6f66e2d02f588ddaaba8b4a0f9c6d517/9f7a2/fs-33.png)
 
 As a result, when the lookup_alias(const char *alias) or print_aliases(void) functions are called, they fail to correctly detect the end of the linked-list and try to access a non-existent list member.
 
-[![The strcmp instruction can read memory from outside the linked-list](/static/d93b6ad64d4bc958888ee8e61ce54c86/569a0/fs-34.png)](/static/d93b6ad64d4bc958888ee8e61ce54c86/569a0/fs-34.png)
+[![The strcmp instruction can read memory from outside the linked-list](https://securitylab.github.com/static/d93b6ad64d4bc958888ee8e61ce54c86/569a0/fs-34.png)](https://securitylab.github.com/static/d93b6ad64d4bc958888ee8e61ce54c86/569a0/fs-34.png)
 
 The severity of this vulnerability depends on the underlying operating system and whether or not it zeroes out the backing memory by default, since that affects the default values of the curr variable.
 
