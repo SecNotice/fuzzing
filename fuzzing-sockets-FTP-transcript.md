@@ -138,42 +138,41 @@
 
 _afl-fuzz -t 1000 -m none -i './AFL/afl_in' -o './AFL/afl_out' -x ./AFL/dictionaries/basic.dict -- ./src/pure-ftpd -S 5000 -dd @@_
 
-Эти изменения означают, что мы не можем вызывать определенные функции сетевого API, такие как getsockname и getnameinfo (мы бы получили ошибку ENOTSOCK). Поэтому я закомментирую эти вызовы функций и жестко закодирую связанные с ними переменные результата:
+Эти изменения означают, что мы не можем вызывать определенные функции сетевого API, такие как getsockname и getnameinfo (мы бы получили ошибку ENOTSOCK). Поэтому я закомментирую эти вызовы функций и преобразую в "константы" связанные с ними переменные результата:
 
-[![Changes in PureFTPd: Comment out getsockname and getnameinfo](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)
+[![Изменения в  PureFTPd: Закомментировать  getsockname и getnameinfo](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)
 
-We also can’t use network fd specific operations such as send(3) so we have to move to a lower level non-network specific API such as write(2):
+Мы также не можем использовать некоторые операции с сетевыми файловыми дескрипторами, такие как send(3), поэтому нам нужно перейти к низкоуровневому API, не зависящему от сети, например write(2):
 
-[![Changes in BFTPd: send call by write call](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)
+[![Изменения в BFTPd: вызов send() на вызов write()](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)
 
-Up to this point we’ve only dealt with the command channel, but we also need to ensure that the data channel receives data so that uploads and downloads can function when we fuzz.
 До этого момента мы имели дело только с командным каналом, но нам также нужно было убедиться, что канал данных получает данные, чтобы загрузка и скачивание могли функционировать во время фаззинга.
 
 Для  **случая закачки файла** я использую вызов getrandom(2) чтобы возвращать файл со случайными данными:
 
-[![Изменения в  PureFTPd: call to linux getrandom(2) for retrieving random data](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)
+[![Изменения в  PureFTPd: вызов getrandom(2) для получения случайных данных](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)
 
-For the **file download case,** we can directly write the file content to stderr:
+Для **случая скачивания файла,** можно напрямую писать содержимое файла в stderr:
 
-[![Изменения в  PureFTPd: redirection of data channel output to stderr](https://securitylab.github.com/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)
+[![Изменения в  PureFTPd: перенаправление вывода канала данных в stderr](https://securitylab.github.com/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)
 
-Because we want to keep using stdin and stderr, we must avoid closing STDOUT_FILENO(1) and STDERR_FILENO(2) in the data channel code:
+Т.к. мы хотим продолжать использовать stdin and stderr, мы должны избегать закрытия STDOUT_FILENO(1) и STDERR_FILENO(2) в коде канала данных:
 
-[![Изменения в  PureFTPd: Avoid to close STDOUT and STDERR file descriptors](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
+[![Изменения в  PureFTPd: Избегать закрытия файловых дескрипторов STDOUT и STDERR](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
 
-We also need to modify the reading/write functions that depend on external libraries, as is the case with **OpenSSL**:
+Также необходимо модифицировать фукнции чтения\записи, которые зависят от внешних библиотек, как в случае с **OpenSSL**:
 
-[![Изменения в  PureFTPd: writing ssl connection output to STDOUT](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
+[![Изменения в  PureFTPd: запись вывода соединения ssl в STDOUT](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
 
-### Modifying file system calls
+### Изменение файловых системных вызовов 
 
-Because we want to maximize the chances of finding a vulnerability, it’s helpful to delete certain system calls such as unlink(2). This will prevent the fuzzer from deleting files by accident.
+Т.к. мы хотим максимизировать шансы найти уязвимости, будет полезно удалить отдельные системные вызовы, такие как unlink(2). Это убережет фаззер от случайного удаления файлов.
 
-[![Изменения в коде ProFTPD: Comment out unlink calls](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
+[![Изменения в коде ProFTPD: Закомментировать вызовы unlink](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
 
-Likewise, we delete any calls to rmdir(2) (directory deletion function in Linux):
+Аналогично мы удаляем любые вызовы rmdir(2) (в Linux - функция удаления каталогов):
 
-[![Changes in BFTPd: Comment out rmdir calls](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)
+[![Изменения в BFTPd: Закомментировать вызовы rmdir](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)](https://securitylab.github.com/static/aded8af3082b3a5007335cdb55575d6a/c5a17/fs-10.png)
 
 Since the fuzzer may end up modifying folder permissions, it’s important to periodically restore the original permissions. This way we avoid the fuzzer getting stuck:
 
@@ -241,7 +240,7 @@ Many applications include their own signal handlers to replace the default Linux
 
 Comment out calls to alarm(2) function can also be helpful:
 
-[![Changes in BFTPd: Comment out calls to alarm](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/fddbb/fs-21.png)](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/3658a/fs-21.png)
+[![Изменения в BFTPd: Comment out calls to alarm](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/fddbb/fs-21.png)](https://securitylab.github.com/static/1cbce2437b5b1e2f1787352b008a17c8/3658a/fs-21.png)
 
 ### Avoiding delays and optimizing
 
