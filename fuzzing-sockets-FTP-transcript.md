@@ -120,37 +120,25 @@
 
 Несмотря на то, что Preeny - удобный инструмент, его подход к удалению сокетов может устранить степень детализации, необходимую для использования особенностей фаззинг-цели. Каждая часть программного обеспечения уникальна и нам часто требуется высокий уровень контроля над тем, как и где влиять на состояние ввода и процесса при фаззинге программного обеспечения, чтобы гарантировать получение необходимого количества покрытия. Из-за этого я обычно выбираю подход с модификацией исходного кода, который дает мне большую гибкость при работе с крайними случаями.
 
-What follows are some practical tips to help you address common challenges when you start with socket based fuzzing, in the context of our FTP case study.
-
 Ниже приведены некоторые практические советы, которые помогут решить распространенные проблемы, появляющиеся, когда вы начинаете  фаззинг на основе сокетов, в контексте нашего примера внедрения FTP.
 
 ### Сокеты
 
-Our FTP fuzzing will mainly focus on the **command channel**, which is the channel we use for transmitting FTP commands and receiving command responses.
+В нашем фаззинге FTP основное внимание будет уделено **командному каналу**, который используется для передачи команд FTP и получения ответов на них.
 
-В нашем размышлении по FTP основное внимание будет уделено командному каналу, который мы используем для передачи команд FTP и получения ответов на команды.
+В случае Linux обычно очень просто поменять файловый дескриптор сетевого эндпойнта на "файловый" файловый дескриптор без необходимости переписывать слишком большую часть кода.
 
-In the Linux case it’s usually very simple to swap a network endpoint backed file descriptor for a file backed file descriptor without having to rewrite too much of the code.
+[![Изменения в коде ProFTPD: преобразование сетевого файлового дескриптора в обыкновенный ](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)
 
-В случае Linux обычно очень просто поменять дескриптор файла с файловой поддержкой конечной точки на дескриптор файла с файловой поддержкой без необходимости переписывать слишком большую часть кода.
+В этом случае inputFile - это текущий файл AFL  ([input_path]/.cur_input), который мы передаем в качестве пользовательского аргумента.
 
-[![Changes in ProFTPD code: turning a network file descriptor into a regular file descriptor](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)](https://securitylab.github.com/static/d7effe195eb9ece94e972345def04aa3/fddbb/fs-1.png)
+[![Извлечение inputFile из командной строки](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)
 
-Изменения в коде ProFTPD: превращение сетевого дескриптора файла в обычный дескриптор файла
-
-In this case, inputFile is the current AFL file ([input_path]/.cur_input) which we pass as a custom argument.
-В этом случае inputFile - это текущий файл AFL ([input_path] /. Cur_input), который мы передаем в качестве пользовательского аргумента.
-
-[![Extracting inputFile from command line](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)](https://securitylab.github.com/static/bec674cde43bb093734f5f7e22b27b8e/8f8c6/fs-2.png)
-Извлечение inputFile из командной строки
-
-The AFL command line is as follows:
 Командная строка AFL выглядит следующим образом:
 
 _afl-fuzz -t 1000 -m none -i './AFL/afl_in' -o './AFL/afl_out' -x ./AFL/dictionaries/basic.dict -- ./src/pure-ftpd -S 5000 -dd @@_
 
-These changes mean that we cannot call certain network API functions such as getsockname and getnameinfo (we’d get an ENOTSOCK error). So I comment out these function calls and hard-code their associated result variables instead:
-Эти изменения означают, что мы не можем вызывать определенные функции сетевого API, такие как getsockname и getnameinfo (мы получили ошибку ENOTSOCK). Поэтому я закомментирую эти вызовы функций и жестко закодирую связанные с ними переменные результата:
+Эти изменения означают, что мы не можем вызывать определенные функции сетевого API, такие как getsockname и getnameinfo (мы бы получили ошибку ENOTSOCK). Поэтому я закомментирую эти вызовы функций и жестко закодирую связанные с ними переменные результата:
 
 [![Changes in PureFTPd: Comment out getsockname and getnameinfo](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)](https://securitylab.github.com/static/2e476bfe9dad76eb74674620f8392665/fddbb/fs-3.png)
 
@@ -159,28 +147,29 @@ We also can’t use network fd specific operations such as send(3) so we have to
 [![Changes in BFTPd: send call by write call](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)](https://securitylab.github.com/static/a7c64bf2c4824da251f451cd8dd24693/7a513/fs-4.png)
 
 Up to this point we’ve only dealt with the command channel, but we also need to ensure that the data channel receives data so that uploads and downloads can function when we fuzz.
+До этого момента мы имели дело только с командным каналом, но нам также нужно было убедиться, что канал данных получает данные, чтобы загрузка и скачивание могли функционировать во время фаззинга.
 
-For the **file upload case** I use a call to getrandom(2) to return random file data:
+Для  **случая закачки файла** я использую вызов getrandom(2) чтобы возвращать файл со случайными данными:
 
-[![Changes in PureFTPd: call to linux getrandom(2) for retrieving random data](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)
+[![Изменения в  PureFTPd: call to linux getrandom(2) for retrieving random data](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)](https://securitylab.github.com/static/69525bba4ec192fcf09080ea51a25391/fddbb/fs-5.png)
 
 For the **file download case,** we can directly write the file content to stderr:
 
-[![Changes in PureFTPd: redirection of data channel output to stderr](https://securitylab.github.com/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)
+[![Изменения в  PureFTPd: redirection of data channel output to stderr](https://securitylab.github.com/static/c6cec285e1db60ce5cfb9bfa936c852c/fddbb/fs-6.png)
 
 Because we want to keep using stdin and stderr, we must avoid closing STDOUT_FILENO(1) and STDERR_FILENO(2) in the data channel code:
 
-[![Changes in PureFTPd: Avoid to close STDOUT and STDERR file descriptors](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
+[![Изменения в  PureFTPd: Avoid to close STDOUT and STDERR file descriptors](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png](https://securitylab.github.com/static/98e5d7001a7d4b0be8ac55de86e7577e/672f7/fs-7.png)
 
 We also need to modify the reading/write functions that depend on external libraries, as is the case with **OpenSSL**:
 
-[![Changes in PureFTPd: writing ssl connection output to STDOUT](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
+[![Изменения в  PureFTPd: writing ssl connection output to STDOUT](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/fddbb/fs-8.png)](https://securitylab.github.com/static/e21e99b60270e333b2e3e3cf50729e7e/6ca41/fs-8.png)
 
 ### Modifying file system calls
 
 Because we want to maximize the chances of finding a vulnerability, it’s helpful to delete certain system calls such as unlink(2). This will prevent the fuzzer from deleting files by accident.
 
-[![Changes in ProFTPD: Comment out unlink calls](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
+[![Изменения в коде ProFTPD: Comment out unlink calls](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)](https://securitylab.github.com/static/25e46a076f5499ee72501f60b1cc2de2/c5a17/fs-9.png)
 
 Likewise, we delete any calls to rmdir(2) (directory deletion function in Linux):
 
@@ -188,13 +177,13 @@ Likewise, we delete any calls to rmdir(2) (directory deletion function in Linux)
 
 Since the fuzzer may end up modifying folder permissions, it’s important to periodically restore the original permissions. This way we avoid the fuzzer getting stuck:
 
-[![Changes in ProFTPd: Restoring privileges in FTP default dir](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)
+[![Изменения в коде ProFTPD: Restoring privileges in FTP default dir](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)](https://securitylab.github.com/static/443c21bbdd57a2f8b740b1324eca7e06/66920/fs-11.png)
 
 ### Event handling
 
 Analyzing multiple event combinations will require the modification of event handling functions. For example, below I’ve replaced the call to poll by a call to FUZZ_poll:
 
-[![Changes in PureFTPd: Call to poll function replaced by FUZZ_poll call](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/fddbb/fs-12.png)](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/6bcd1/fs-12.png)
+[![Изменения в  PureFTPd: Call to poll function replaced by FUZZ_poll call](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/fddbb/fs-12.png)](https://securitylab.github.com/static/5b98e8146a2a938be35571d54166756b/6bcd1/fs-12.png)
 
 This function is very simple, and just increments fds[0].revents and fds[1].revents values depending on RAND_MAX/10 and RAND_MAX/5 probability:
 
@@ -202,11 +191,11 @@ This function is very simple, and just increments fds[0].revents and fds[1].reve
 
 You often want to delete or replace moot event polling code altogether since it doesn’t contribute to our surface coverage and just introduces unneeded complexity. In the following example, we patch out a moot select(2) call to that end.
 
-[![Changes in ProFTPD: Comment out select call](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/fddbb/fs-14.png)](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/73d01/fs-14.png)
+[![Изменения в коде ProFTPD: Comment out select call](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/fddbb/fs-14.png)](https://securitylab.github.com/static/ceb0cb66da1ba98ff9c5c48cada23dca/73d01/fs-14.png)
 
 We must also take into account any situation where concurrent events between the data channel and the command channel get interleaved. CVE-2020-9273 is a good example of this occurring. This bug is triggered by sending a specific command sequence to the command channel while a data transfer is also running. To deal with that situation, I’ve built a small fuzzer function fuzzer_5tc2 that feeds strings from the provided dictionary to the fuzzer:
 
-[![Changes in PureFTPd: custom fuzzing function that feeds strings from a dictionary](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/fddbb/fs-15.png)](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/92cc8/fs-15.png)
+[![Изменения в  PureFTPd: custom fuzzing function that feeds strings from a dictionary](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/fddbb/fs-15.png)](https://securitylab.github.com/static/0d9516eb604454c9cb4d944dd1830f56/92cc8/fs-15.png)
 
 ### Bye bye forks
 
@@ -222,7 +211,7 @@ $ ./configure --enable-devel=coredump:nodaemon:nofork:profile:stacktrace ...
 
 In the absence of any such options, to avoid fork(2), we just delete the actual fork(2) invocation and hardcode a return value of 0 which will continue down the intended child process execution path:
 
-[![Changes in PureFTPd: fork commented](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)
+[![Изменения в  PureFTPd: fork commented](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)](https://securitylab.github.com/static/0979e153faee1ce14ce0550d21906dba/e82b9/fs-16.png)
 
 ### chroot and permissions
 
@@ -232,7 +221,7 @@ Once the user is logged in, the FTP server usually calls chroot(2) to change the
 
 For example, the child process path may drop privileges and we may no longer be able to access the AFL .cur_input file. To address this, the following is a simple example in which we just set the file world readable/writable/executable:
 
-[![Changes in ProFTPd: Changing .cur_input permissions](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)
+[![Изменения в коде ProFTPD: Changing .cur_input permissions](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)](https://securitylab.github.com/static/bb906c6ba120cafdc9dbe7467c5c2e38/60eaf/fs-17.png)
 
 ### Reducing randomness
 
@@ -240,9 +229,9 @@ In order to improve the AFL stability score, we need to minimize randomness in o
 
 In the following example, we neuter the random number generation and return a repeatable RNG state:
 
-[![Changes in PureFTPd: Setting a fixed rng](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/fddbb/fs-18.png)](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/b828e/fs-18.png)
+[![Изменения в  PureFTPd: Setting a fixed rng](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/fddbb/fs-18.png)](https://securitylab.github.com/static/fa8624a859a3ea57215a9b0805a0445d/b828e/fs-18.png)
 
-[![Changes in ProFTPd: Initializing srandom with a fixed value](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)
+[![Изменения в коде ProFTPD: Initializing srandom with a fixed value](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)](https://securitylab.github.com/static/c8c475d332752b45b4a228042bb4c947/51c61/fs-19.png)
 
 ### Signals
 
@@ -258,15 +247,15 @@ Comment out calls to alarm(2) function can also be helpful:
 
 Timing is critical, even more so when we talk about fuzzing. Any unneeded delays must be minimized in the application to increase fuzzing speed. In the following example, we make timing intervals smaller where possible and remove unneeded calls to sleep(3) or usleep(3):
 
-[![Changes in ProFTPD: Reducing delay time](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/fddbb/fs-22.png)](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/8ff1e/fs-22.png)
+[![Изменения в коде ProFTPD: Reducing delay time](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/fddbb/fs-22.png)](https://securitylab.github.com/static/16740e422c06033e75f2bcc44c97cd89/8ff1e/fs-22.png)
 
-[![Changes in PureFTPd: comment out usleep](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)
+[![Изменения в  PureFTPd: comment out usleep](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)](https://securitylab.github.com/static/8415b829bb2478414b78c028131f6613/c5a17/fs-23.png)
 
 Likewise, often when fuzzing, you’ll notice that small changes in logic flow can speed up the fuzzing process tremendously. For example, as the number of generated files increases, the execution time of the listdir command grew, so I chose to only execute listdir once every N times:
 
-[![Changes in PureFTPd: reduced executions of listdir to speed up fuzzing](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)
+[![Изменения в  PureFTPd: reduced executions of listdir to speed up fuzzing](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)](https://securitylab.github.com/static/e9d581457b99c7ed90afc92bb1f7cca2/c5a17/fs-24.png)
 
-### One last point
+### Один финальный вопрос
 
 As a final point, I want to highlight an aspect that’s often overlooked: **FUZZING IS NOT A FULLY AUTOMATED PROCESS**.
 
@@ -280,7 +269,7 @@ The process of integrating the targeted code and the fuzzer, is a task that requ
 
 This should inspire developers to facilitate fuzzing, as well as inspire the creation of fuzzing harnesses that ease the integration with AFL and LibFuzzer. As my colleague [Kevin](https://github.com/kevinbackhouse) recently wrote, [”the concept of anti-fuzzing is just ridiculous”](how-to-escape-from-the-fuzz). Please, **avoid security by obscurity**.
 
-## Input corpus
+## Входной корпус
 
 As far as fuzzing input corpus is concerned for this project, my main goal was to achieve full edge coverage for all FTP commands, as well as a diverse combination of execution scenarios to obtain a reasonably complete path coverage.
 
@@ -288,9 +277,9 @@ As far as fuzzing input corpus is concerned for this project, my main goal was t
 
 Check out the **[input corpus](https://github.com/antonio-morales/Fuzzing/tree/master/Input%20Corpus/FTP/PureFTPd)** I’ve used for PureFTPd. And you can also find here [an example of a simple FTP fuzzing dictionary](https://github.com/antonio-morales/Fuzzing/blob/master/Dictionaries/FTP/Example.dict.txt).
 
-## Vulnerability details
+## Детали уязвимостей
 
-In this section, I’ll detail some of the more interesting vulnerabilities I found as a result of this fuzzing effort.
+В этом разделе я раскрою детали некоторых из наиболее интересных уязвимостей, которые я нашел в результате этого фаззинга.
 
 ### CVE-2020-9273
 
